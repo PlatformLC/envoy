@@ -272,6 +272,7 @@ def envoy_dependencies(skip_targets = []):
     _com_github_unicode_org_icu()
     _com_github_intel_ipp_crypto_crypto_mb()
     _com_github_intel_qatlib()
+    _com_github_libbpf_libbpf()
     _com_github_jbeder_yaml_cpp()
     _com_github_libevent_libevent()
     _com_github_luajit_luajit()
@@ -501,6 +502,23 @@ def _com_github_intel_qatlib():
     external_http_archive(
         name = "com_github_intel_qatlib",
         build_file_content = BUILD_ALL_CONTENT,
+    )
+
+def _com_github_libbpf_libbpf():
+    external_http_archive(
+        name = "com_github_libbpf_libbpf",
+        build_file_content = """
+filegroup(
+    name = "all",
+    srcs = glob([
+        "**",
+    ]),
+    visibility = ["//visibility:public"],
+)""",
+    )
+    native.bind(
+        name = "libbpf",
+        actual = "@envoy//bazel/foreign_cc:libbpf",
     )
 
 def _com_github_jbeder_yaml_cpp():

@@ -55,6 +55,7 @@ else
   START_COMMAND=(
       "/bin/bash"
       "-lc"
+      #"apt update && apt install libelf-dev -y && \
       "groupadd ${DOCKER_GROUP_ARGS[*]} -f envoygroup \
           && useradd -o --uid ${USER_UID} ${DOCKER_USER_ARGS[*]} --no-create-home --home-dir /build envoybuild \
           && usermod -a -G pcap envoybuild \
@@ -99,7 +100,7 @@ fi
 
 
 # Since we specify an explicit hash, docker-run will pull from the remote repo if missing.
-docker run --rm \
+docker run -it --rm \
        "${ENVOY_DOCKER_OPTIONS[@]}" \
        "${VOLUMES[@]}" \
        -e AZP_BRANCH \

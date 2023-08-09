@@ -142,6 +142,13 @@ std::unique_ptr<Socket::Options> SocketOptionFactory::buildReusePortOptions() {
   return options;
 }
 
+std::unique_ptr<Socket::Options> SocketOptionFactory::buildReusePortEBPFOptions(int fd) {
+  std::unique_ptr<Socket::Options> options = std::make_unique<Socket::Options>();
+  options->push_back(std::make_shared<Network::SocketOptionImpl>(
+      envoy::config::core::v3::SocketOption::STATE_PREBIND, ENVOY_ATTACH_REUSEPORT_EBPF, fd));
+  return options;
+}
+
 std::unique_ptr<Socket::Options> SocketOptionFactory::buildUdpGroOptions() {
   std::unique_ptr<Socket::Options> options = std::make_unique<Socket::Options>();
   options->push_back(std::make_shared<SocketOptionImpl>(

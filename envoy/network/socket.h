@@ -162,6 +162,12 @@ static_assert(IP_RECVDSTADDR == IP_SENDSRCADDR);
 #define ENVOY_ATTACH_REUSEPORT_CBPF Network::SocketOptionName()
 #endif
 
+#ifdef SO_ATTACH_REUSEPORT_EBPF
+#define ENVOY_ATTACH_REUSEPORT_EBPF                                                                \
+  ENVOY_MAKE_SOCKET_OPTION_NAME(SOL_SOCKET, SO_ATTACH_REUSEPORT_EBPF)
+#else
+#define ENVOY_ATTACH_REUSEPORT_EBPF Network::SocketOptionName()
+#endif
 /**
  * Interfaces for providing a socket's various addresses. This is split into a getters interface
  * and a getters + setters interface. This is so that only the getters portion can be overridden

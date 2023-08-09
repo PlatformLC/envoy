@@ -1448,6 +1448,19 @@ REPOSITORY_LOCATIONS_SPEC = dict(
         license = "MIT",
         license_url = "https://github.com/protocolbuffers/utf8_range/blob/{version}/LICENSE",
     ),
+    com_github_libbpf_libbpf = dict(
+        project_name = "libbpf",
+        project_desc = "libbpf stand-alone build",
+        project_url = "https://github.com/libbpf/libbpf",
+        version = "1.2.2",
+        sha256 = "32b0c41eabfbbe8e0c8aea784d7495387ff9171b5a338480a8fbaceb9da8d5e5",
+        urls = ["https://github.com/libbpf/libbpf/archive/refs/tags/v{version}.tar.gz"],
+        strip_prefix = "libbpf-{version}",
+        use_category = ["build", "dataplane_core", "controlplane"],
+        release_date = "2023-07-12",
+        cpe = "N/A",
+        license_url = "https://github.com/libbpf/libbpf/blob/v{version}/LICENSE",
+    ),
 )
 
 def _compiled_protoc_deps(locations, versions):

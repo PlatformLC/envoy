@@ -1,3 +1,4 @@
+#include <bpf/bpf.h>
 #include "source/extensions/listener_managers/listener_manager/listener_impl.h"
 
 #include <functional>
@@ -77,10 +78,12 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
     Network::Socket::Type socket_type, const Network::Socket::OptionsSharedPtr& options,
     const std::string& listener_name, uint32_t tcp_backlog_size,
     ListenerComponentFactory::BindType bind_type,
-    const Network::SocketCreationOptions& creation_options, uint32_t num_sockets)
+    const Network::SocketCreationOptions& creation_options, uint32_t num_sockets,
+    int reuseport_bpf_fd, int reuseport_map_fd)
     : factory_(factory), local_address_(address), socket_type_(socket_type), options_(options),
       listener_name_(listener_name), tcp_backlog_size_(tcp_backlog_size), bind_type_(bind_type),
-      socket_creation_options_(creation_options) {
+      socket_creation_options_(creation_options), reuseport_bpf_fd_(reuseport_bpf_fd),
+      reuseport_map_fd_(reuseport_map_fd) {
 
   if (local_address_->type() == Network::Address::Type::Ip) {
     if (socket_type == Network::Socket::Type::Datagram) {
@@ -101,6 +104,9 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
   }
 
   sockets_.push_back(createListenSocketAndApplyOptions(factory, socket_type, 0));
+  const int i = 0;
+  const int fd = sockets_.back()->ioHandle().fdDoNotUse();
+  bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
 
   if (sockets_[0] != nullptr && local_address_->ip() && local_address_->ip()->port() == 0) {
     local_address_ = sockets_[0]->connectionInfoProvider().localAddress();
@@ -114,6 +120,8 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
       sockets_.push_back(sockets_[0]->duplicate());
     } else {
       sockets_.push_back(createListenSocketAndApplyOptions(factory, socket_type, i));
+      const int fd = sockets_.back()->ioHandle().fdDoNotUse();
+      bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
     }
   }
   ASSERT(sockets_.size() == num_sockets);
@@ -125,7 +133,9 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(const ListenSocketFactoryImpl& 
       listener_name_(factory_to_clone.listener_name_),
       tcp_backlog_size_(factory_to_clone.tcp_backlog_size_),
       bind_type_(factory_to_clone.bind_type_),
-      socket_creation_options_(factory_to_clone.socket_creation_options_) {
+      socket_creation_options_(factory_to_clone.socket_creation_options_),
+      reuseport_bpf_fd_(factory_to_clone.reuseport_bpf_fd_),
+      reuseport_map_fd_(factory_to_clone.reuseport_map_fd_) {
   for (auto& socket : factory_to_clone.sockets_) {
     // In the cloning case we always duplicate() the socket. This makes sure that during listener
     // update/drain we don't lose any incoming connections when using reuse_port. Specifically on
@@ -148,15 +158,21 @@ Network::SocketSharedPtr ListenSocketFactoryImpl::createListenSocketAndApplyOpti
   // Socket might be nullptr when doing server validation.
   // TODO(mattklein123): See the comment in the validation code. Make that code not return nullptr
   // so this code can be simpler.
+  Network::Socket::OptionsSharedPtr options__ = std::make_shared<std::vector<Network::Socket::OptionConstSharedPtr>>();
+  Network::Socket::appendOptions(options__, options_);
+
+  if (worker_index == 0) {
+    Network::Socket::appendOptions(options__, Network::SocketOptionFactory::buildReusePortEBPFOptions(reuseport_bpf_fd_));
+  }
   Network::SocketSharedPtr socket = factory.createListenSocket(
-      local_address_, socket_type, options_, bind_type_, socket_creation_options_, worker_index);
+      local_address_, socket_type, options__, bind_type_, socket_creation_options_, worker_index);
 
   // Binding is done by now.
   ENVOY_LOG(debug, "Create listen socket for listener {} on address {}", listener_name_,
             local_address_->asString());
-  if (socket != nullptr && options_ != nullptr) {
+  if (socket != nullptr && options__ != nullptr) {
     const bool ok = Network::Socket::applyOptions(
-        options_, *socket, envoy::config::core::v3::SocketOption::STATE_BOUND);
+        options__, *socket, envoy::config::core::v3::SocketOption::STATE_BOUND);
     const std::string message =
         fmt::format("{}: Setting socket options {}", listener_name_, ok ? "succeeded" : "failed");
     if (!ok) {
@@ -168,7 +184,7 @@ Network::SocketSharedPtr ListenSocketFactoryImpl::createListenSocketAndApplyOpti
 
     // Add the options to the socket_ so that STATE_LISTENING options can be
     // set after listen() is called and immediately before the workers start running.
-    socket->addOptions(options_);
+    socket->addOptions(options__);
   }
   return socket;
 }

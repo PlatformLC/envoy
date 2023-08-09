@@ -12,6 +12,7 @@ envoy_extension_package()
 
 envoy_cc_extension(
     name = "listener_manager_lib",
+    copts = ["-Wno-old-style-cast"],
     srcs = [
         "listener_impl.cc",
         "listener_manager_impl.cc",
@@ -19,6 +20,7 @@ envoy_cc_extension(
     hdrs = [
         "listener_impl.h",
         "listener_manager_impl.h",
+        "reuseport.skel.h",
     ],
     # any changes to this should be reviewed by mobile maintainers
     # to ensure that listener code doesn't leak back into Envoy Mobile.
@@ -27,6 +29,7 @@ envoy_cc_extension(
         "//source/server/config_validation:__subpackages__",
         "//test:__subpackages__",
     ],
+    external_deps = ["libbpf"],
     deps = [
         ":connection_handler_lib",
         "//source/server:listener_manager_factory_lib",

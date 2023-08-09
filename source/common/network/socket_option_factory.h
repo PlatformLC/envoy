@@ -35,6 +35,7 @@ public:
   static std::unique_ptr<Socket::Options> buildIpPacketInfoOptions();
   static std::unique_ptr<Socket::Options> buildRxQueueOverFlowOptions();
   static std::unique_ptr<Socket::Options> buildReusePortOptions();
+  static std::unique_ptr<Socket::Options> buildReusePortEBPFOptions(int fd);
   static std::unique_ptr<Socket::Options> buildUdpGroOptions();
 };
 } // namespace Network

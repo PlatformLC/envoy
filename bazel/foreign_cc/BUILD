@@ -1,5 +1,6 @@
 load("//bazel:envoy_build_system.bzl", "envoy_cmake", "envoy_package")
 load("@rules_foreign_cc//foreign_cc:configure.bzl", "configure_make")
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "make")
 
 licenses(["notice"])  # Apache 2
 
@@ -279,6 +280,22 @@ envoy_cmake(
         "//external:ssl",
         "//external:zlib",
     ],
+)
+
+make(
+    name = "libbpf",
+    env = {
+        "BUILD_STATIC_ONLY": "1",
+    },
+    linkopts = ["-lelf"],
+    # include linux heads for current libbpf
+    copts = ["-I./include"],
+    # args for make
+    args = ["-C ./src"],
+    postfix_script = "mv src/libbpf.a $INSTALLDIR/lib \
+                        && cp -Lr include/uapi/* $INSTALLDIR/include/",
+    lib_source = "@com_github_libbpf_libbpf//:all",
+    out_static_libs = ["libbpf.a"],
 )
 
 envoy_cmake(

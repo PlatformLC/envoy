@@ -70,7 +70,7 @@ public:
                           const std::string& listener_name, uint32_t tcp_backlog_size,
                           ListenerComponentFactory::BindType bind_type,
                           const Network::SocketCreationOptions& creation_options,
-                          uint32_t num_sockets);
+                          uint32_t num_sockets, int reuseport_bpf_fd, int reuseport_map_fd_);
 
   // Network::ListenSocketFactory
   Network::Socket::Type socketType() const override { return socket_type_; }
@@ -105,6 +105,8 @@ private:
   const uint32_t tcp_backlog_size_;
   ListenerComponentFactory::BindType bind_type_;
   const Network::SocketCreationOptions socket_creation_options_;
+  const int reuseport_bpf_fd_;
+  const int reuseport_map_fd_;
   // One socket for each worker, pre-created before the workers fetch the sockets. There are
   // 3 different cases:
   // 1) All are null when doing config validation.
