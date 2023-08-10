@@ -1461,6 +1461,19 @@ REPOSITORY_LOCATIONS_SPEC = dict(
         cpe = "N/A",
         license_url = "https://github.com/libbpf/libbpf/blob/v{version}/LICENSE",
     ),
+    com_github_libbpf_bpftool = dict(
+        project_name = "bpftool",
+        project_desc = "bpftool stand-alone build",
+        project_url = "https://github.com/libbpf/bpftool/",
+        version = "7.2.0",
+        sha256 = "baa1e1c2a79c06a1f3112be3e47a6b4e00df0dc07a1e9117f2213a96fb37bf8a",
+        urls = ["https://github.com/libbpf/bpftool/releases/download/v{version}/bpftool-libbpf-v{version}-sources.tar.gz"],
+        use_category = ["build"],
+        strip_prefix = "bpftool",
+        release_date = "2023-05-03",
+        cpe = "N/A",
+        license_url = "https://github.com/libbpf/bpftool/blob/v{version}/LICENSE",
+    ),
 )
 
 def _compiled_protoc_deps(locations, versions):

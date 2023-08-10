@@ -273,6 +273,7 @@ def envoy_dependencies(skip_targets = []):
     _com_github_intel_ipp_crypto_crypto_mb()
     _com_github_intel_qatlib()
     _com_github_libbpf_libbpf()
+    _com_github_libbpf_bpftool()
     _com_github_jbeder_yaml_cpp()
     _com_github_libevent_libevent()
     _com_github_luajit_luajit()
@@ -519,6 +520,23 @@ filegroup(
     native.bind(
         name = "libbpf",
         actual = "@envoy//bazel/foreign_cc:libbpf",
+    )
+
+def _com_github_libbpf_bpftool():
+    external_http_archive(
+        name = "com_github_libbpf_bpftool",
+        build_file_content = """
+filegroup(
+    name = "all",
+    srcs = glob([
+        "**",
+    ]),
+    visibility = ["//visibility:public"],
+)""",
+    )
+    native.bind(
+        name = "bpftool",
+        actual = "@envoy//bazel/foreign_cc:bpftool",
     )
 
 def _com_github_jbeder_yaml_cpp():

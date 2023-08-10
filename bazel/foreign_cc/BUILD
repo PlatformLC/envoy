@@ -298,6 +298,24 @@ make(
     out_static_libs = ["libbpf.a"],
 )
 
+make(
+    name = "bpftool",
+    env = {
+        "HOSTAR": "llvm-ar",
+        "HOSTCC": "clang",
+        "HOSTLD": "ld.lld",
+    },
+    linkopts = ["-lelf"],
+    # include linux heads for current libbpf
+    copts = ["-I./include", "-I./include/uapi"],
+    # args for make
+    args = ["-C ./src"],
+    targets = ["bootstrap"],
+    postfix_script = "mv src/bootstrap/bpftool $INSTALLDIR/bin",
+    lib_source = "@com_github_libbpf_bpftool//:all",
+    out_binaries = ["bpftool"],
+)
+
 envoy_cmake(
     name = "event",
     cache_entries = {

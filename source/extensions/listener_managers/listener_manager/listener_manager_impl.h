@@ -27,7 +27,11 @@
 #include "source/extensions/listener_managers/listener_manager/listener_impl.h"
 #include "source/server/listener_manager_factory.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#include "source/extensions/listener_managers/listener_manager/reuseport_ebpf.h"
 #include "source/extensions/listener_managers/listener_manager/reuseport.skel.h"
+#pragma clang diagnostic pop
 
 namespace Envoy {
 namespace Server {

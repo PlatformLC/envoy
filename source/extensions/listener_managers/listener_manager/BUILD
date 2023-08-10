@@ -6,21 +6,41 @@ load(
     "envoy_select_enable_http3",
 )
 
+load(
+    "//bazel:envoy_bpf.bzl",
+    "bpf_program",
+    "bpf_skeleton",
+)
+
 licenses(["notice"])  # Apache 2
 
 envoy_extension_package()
 
+bpf_program(
+    name = "reuseport_bpf_prog",
+    bpf_object = "reuseport.bpf.o",
+    src = "reuseport.bpf.c",
+    hdrs = ["reuseport_ebpf.h"]
+)
+
+# The skeleton header file generated from the eBPF program.
+bpf_skeleton(
+    name = "reuseport_bpf_skel",
+    bpf_object = ":reuseport_bpf_prog",
+    skel_hdr = "reuseport.skel.h"
+)
+
 envoy_cc_extension(
     name = "listener_manager_lib",
-    copts = ["-Wno-old-style-cast"],
     srcs = [
         "listener_impl.cc",
         "listener_manager_impl.cc",
+        "reuseport_ebpf.h",
+        ":reuseport_bpf_skel",
     ],
     hdrs = [
         "listener_impl.h",
         "listener_manager_impl.h",
-        "reuseport.skel.h",
     ],
     # any changes to this should be reviewed by mobile maintainers
     # to ensure that listener code doesn't leak back into Envoy Mobile.
@@ -29,7 +49,7 @@ envoy_cc_extension(
         "//source/server/config_validation:__subpackages__",
         "//test:__subpackages__",
     ],
-    external_deps = ["libbpf"],
+    external_deps = ["libbpf", "bpftool"],
     deps = [
         ":connection_handler_lib",
         "//source/server:listener_manager_factory_lib",
