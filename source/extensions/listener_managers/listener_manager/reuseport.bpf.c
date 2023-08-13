@@ -11,11 +11,17 @@
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 #endif
 
+#define err(fmt, ...)                   \
+    ({                                  \
+        bpf_printk(fmt, ##__VA_ARGS__); \
+    })
+
 #define dbg(fmt, ...)                   \
     ({                                  \
         bpf_printk(fmt, ##__VA_ARGS__); \
     })
 
+#define dbg(fmt, ...)   ({})
 typedef struct {
 	__u32 idx;
 	struct bpf_spin_lock lock;	
@@ -23,9 +29,9 @@ typedef struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_REUSEPORT_SOCKARRAY);
-	__uint(max_entries, 65535);
+	__uint(max_entries, 64);
 	__type(key, __u32);
-	__type(value, __u32);
+	__type(value, __u64);
 } reuseport_map SEC(".maps");
 
 struct {
@@ -65,6 +71,7 @@ int select_sock(struct sk_reuseport_md *reuse_md)
 
 	idx = bpf_map_lookup_elem(&index_map, &index_zero);
 	if (!idx) {
+		err("bpf_map_lookup_elem error");
 		GOTO_DONE(DROP_MISC); 
 	}
 	
@@ -77,11 +84,14 @@ int select_sock(struct sk_reuseport_md *reuse_md)
 	// index = __sync_add_and_fetch(&idx, 1);
 
 	index = index % rodata.total_sockets;
-	dbg("assign to thread %d/%d\n", index, rodata.total_sockets);
 	err = bpf_sk_select_reuseport(reuse_md, &reuseport_map, &index,
 				      flags);
-	if (!err)
+	if (!err) {
+		dbg("assign to thread %d/%d\n", index, rodata.total_sockets);
 		GOTO_DONE(PASS);
+	}
+	
+	err("bpf_sk_select_reuseport error: %d", err);
 
 	GOTO_DONE(PASS_ERR_SK_SELECT_REUSEPORT);
 

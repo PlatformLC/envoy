@@ -300,14 +300,33 @@ ListenerManagerImpl::ListenerManagerImpl(Instance& server,
   }
   skel_obj_->rodata->rodata.total_sockets = server.options().concurrency();
 
-  const int err = reuseport_bpf__load(skel_obj_);
+  int err = reuseport_bpf__load(skel_obj_);
 	if (err) {
     ENVOY_LOG(error, "reuseport_kern_bpf__load err:%d\n", err);
   }
   reuseport_array_ = bpf_map__fd(skel_obj_->maps.reuseport_map);
   if (reuseport_array_ < 0) {
-    ENVOY_LOG(error, "get reuseport_map fd err:%d\n", reuseport_array_);
+    ENVOY_LOG(error, "get reuseport_map fd err:%d\n", errno);
   }
+
+  idx_array_ = bpf_map__fd(skel_obj_->maps.index_map);
+  if (idx_array_ < 0) {
+    ENVOY_LOG(error, "get reuseport_map fd err:%d\n", errno);
+  }
+  const uint32_t i = 0;
+  uint32_t fd = 52;
+  err = bpf_map_update_elem(reuseport_array_, &i, &fd, BPF_ANY);
+  if (err)
+    ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_array_, errno);
+  else 
+    ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
+  uint32_t idx; 
+  err = bpf_map_lookup_elem(idx_array_, &i, &idx);
+  if (err)
+    ENVOY_LOG(error, "bpf_map_lookup_elem failed mapfd({}): {}", idx_array_, errno);
+  else 
+    ENVOY_LOG(info, "bpf_map_lookup_elem {}  {}", i, idx);
+
 	select_prog_ = bpf_program__fd(skel_obj_->progs.select_sock);
 	if (select_prog_ < 0) {
     ENVOY_LOG(error, "get prog fd select_prog: %d\n", select_prog_);

@@ -84,6 +84,9 @@ void ActiveTcpListener::onAccept(Network::ConnectionSocketPtr&& socket) {
     return;
   }
 
+  // ENVOY_LOG(info,
+  // "onAccept socket fd {} connections {}", socket->ioHandle().fdDoNotUse(), this->numConnections());
+  
   onAcceptWorker(std::move(socket), config_->handOffRestoredDestinationConnections(), false);
 }
 

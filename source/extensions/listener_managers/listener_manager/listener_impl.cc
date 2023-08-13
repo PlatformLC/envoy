@@ -1,4 +1,3 @@
-#include <bpf/bpf.h>
 #include "source/extensions/listener_managers/listener_manager/listener_impl.h"
 
 #include <functional>
@@ -104,9 +103,19 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
   }
 
   sockets_.push_back(createListenSocketAndApplyOptions(factory, socket_type, 0));
-  const int i = 0;
-  const int fd = sockets_.back()->ioHandle().fdDoNotUse();
-  bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+  unsigned int i = 0;
+  uint64_t fd = sockets_.back()->ioHandle().fdDoNotUse();
+  auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+  if (err)
+    ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
+  else 
+    ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
+  fd = 60;
+  err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+  if (err)
+    ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
+  else 
+    ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
 
   if (sockets_[0] != nullptr && local_address_->ip() && local_address_->ip()->port() == 0) {
     local_address_ = sockets_[0]->connectionInfoProvider().localAddress();
@@ -120,8 +129,12 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
       sockets_.push_back(sockets_[0]->duplicate());
     } else {
       sockets_.push_back(createListenSocketAndApplyOptions(factory, socket_type, i));
-      const int fd = sockets_.back()->ioHandle().fdDoNotUse();
-      bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+      const uint64_t fd = sockets_.back()->ioHandle().fdDoNotUse();
+      auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+      if (err)
+        ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
+      else 
+        ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
     }
   }
   ASSERT(sockets_.size() == num_sockets);
@@ -218,6 +231,18 @@ void ListenSocketFactoryImpl::doFinalPreWorkerInit() {
   // On all platforms we should listen on the first socket.
   auto iterator = sockets_.begin();
   listen_and_apply_options(*iterator, tcp_backlog_size_);
+  
+  // we should update bpfmap right after doFinalPreWorkerInit
+  // because it calls listen and make the socket "valid" for bfpmap update
+  uint32_t i = 0;
+  uint64_t fd = (*iterator)->ioHandle().fdDoNotUse();
+  auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+  if (err)
+    ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
+  else 
+    ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
+  ++i;
+
   ++iterator;
 #ifndef WIN32
   // With this implementation on Windows we only accept
@@ -227,6 +252,13 @@ void ListenSocketFactoryImpl::doFinalPreWorkerInit() {
   // does not cause accepts to hang in the OS.
   for (; iterator != sockets_.end(); ++iterator) {
     listen_and_apply_options(*iterator, tcp_backlog_size_);
+    fd = (*iterator)->ioHandle().fdDoNotUse();
+    auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+    if (err)
+      ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
+    else 
+      ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
+    ++i;
   }
 #endif
 }
@@ -686,6 +718,8 @@ void ListenerImpl::buildListenSocketOptions(
                              Network::SocketOptionFactory::buildIpFreebindOptions());
     }
     if (reuse_port_) {
+      ENVOY_LOG(info,
+              "reuse_port enabled, add reuseport socket option");
       addListenSocketOptions(listen_socket_options_list_[i],
                              Network::SocketOptionFactory::buildReusePortOptions());
     }
@@ -796,6 +830,8 @@ void ListenerImpl::buildConnectionBalancer(const Network::Address::Instance& add
       case envoy::config::listener::v3::Listener_ConnectionBalanceConfig::kExactBalance:
         connection_balancers_.emplace(address.asString(),
                                       std::make_shared<Network::ExactConnectionBalancerImpl>());
+        ENVOY_LOG(info,
+              "ExactBalance was created for {}", name_);
         break;
       case envoy::config::listener::v3::Listener_ConnectionBalanceConfig::kExtendBalance: {
         const std::string connection_balance_library_type{TypeUtil::typeUrlToDescriptorFullName(
@@ -820,6 +856,8 @@ void ListenerImpl::buildConnectionBalancer(const Network::Address::Instance& add
     } else {
       connection_balancers_.emplace(address.asString(),
                                     std::make_shared<Network::NopConnectionBalancerImpl>());
+       ENVOY_LOG(info,
+              "NopBalance was created for {}", name_);
     }
 #endif
   }

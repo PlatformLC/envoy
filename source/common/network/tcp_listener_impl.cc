@@ -50,6 +50,8 @@ void TcpListenerImpl::onSocketEvent(short flags) {
     sockaddr_storage remote_addr;
     socklen_t remote_addr_len = sizeof(remote_addr);
 
+    // ENVOY_LOG_MISC(info, "onSocketEvent: on scoket fd {}", socket_->ioHandle().fdDoNotUse());
+
     IoHandlePtr io_handle =
         socket_->ioHandle().accept(reinterpret_cast<sockaddr*>(&remote_addr), &remote_addr_len);
     if (io_handle == nullptr) {
