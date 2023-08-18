@@ -294,44 +294,6 @@ ListenerManagerImpl::ListenerManagerImpl(Instance& server,
         });
   }
   
-  skel_obj_ = reuseport_bpf__open();
-  if (!skel_obj_) {
-	  ENVOY_LOG(error, "failed to open bpf skeleton");
-  }
-  skel_obj_->rodata->rodata.total_sockets = server.options().concurrency();
-
-  int err = reuseport_bpf__load(skel_obj_);
-	if (err) {
-    ENVOY_LOG(error, "reuseport_kern_bpf__load err:%d\n", err);
-  }
-  reuseport_array_ = bpf_map__fd(skel_obj_->maps.reuseport_map);
-  if (reuseport_array_ < 0) {
-    ENVOY_LOG(error, "get reuseport_map fd err:%d\n", errno);
-  }
-
-  idx_array_ = bpf_map__fd(skel_obj_->maps.index_map);
-  if (idx_array_ < 0) {
-    ENVOY_LOG(error, "get reuseport_map fd err:%d\n", errno);
-  }
-  const uint32_t i = 0;
-  uint32_t fd = 52;
-  err = bpf_map_update_elem(reuseport_array_, &i, &fd, BPF_ANY);
-  if (err)
-    ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_array_, errno);
-  else 
-    ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
-  uint32_t idx; 
-  err = bpf_map_lookup_elem(idx_array_, &i, &idx);
-  if (err)
-    ENVOY_LOG(error, "bpf_map_lookup_elem failed mapfd({}): {}", idx_array_, errno);
-  else 
-    ENVOY_LOG(info, "bpf_map_lookup_elem {}  {}", i, idx);
-
-	select_prog_ = bpf_program__fd(skel_obj_->progs.select_sock);
-	if (select_prog_ < 0) {
-    ENVOY_LOG(error, "get prog fd select_prog: %d\n", select_prog_);
-  }
-
   for (uint32_t i = 0; i < server.options().concurrency(); i++) {
     workers_.emplace_back(
         worker_factory.createWorker(i, server.overloadManager(), absl::StrCat("worker_", i)));
@@ -1140,7 +1102,7 @@ void ListenerManagerImpl::createListenSocketFactory(ListenerImpl& listener) {
       listener.addSocketFactory(std::make_unique<ListenSocketFactoryImpl>(
           *factory_, listener.addresses()[i], socket_type, listener.listenSocketOptions(i),
           listener.name(), listener.tcpBacklogSize(), bind_type, creation_options,
-          server_.options().concurrency(), select_prog_, reuseport_array_));
+          server_.options().concurrency()));
     }
   }
   END_TRY

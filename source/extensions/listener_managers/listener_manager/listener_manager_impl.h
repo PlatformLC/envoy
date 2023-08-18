@@ -27,14 +27,6 @@
 #include "source/extensions/listener_managers/listener_manager/listener_impl.h"
 #include "source/server/listener_manager_factory.h"
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wold-style-cast"
-#include <bpf/libbpf.h>
-#include <bpf/bpf.h>
-#include "source/extensions/listener_managers/listener_manager/reuseport_ebpf.h"
-#include "source/extensions/listener_managers/listener_manager/reuseport.skel.h"
-#pragma clang diagnostic pop
-
 namespace Envoy {
 namespace Server {
 
@@ -332,10 +324,6 @@ private:
 
   std::vector<WorkerPtr> workers_;
   bool workers_started_{};
-  struct reuseport_bpf *skel_obj_{};
-  int reuseport_array_{};
-  int idx_array_{};
-  int select_prog_{};
   absl::optional<StopListenersType> stop_listeners_type_;
   Stats::ScopeSharedPtr scope_;
   ListenerManagerStats stats_;

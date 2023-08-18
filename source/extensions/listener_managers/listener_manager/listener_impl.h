@@ -25,6 +25,14 @@
 #include "source/extensions/listener_managers/listener_manager/filter_chain_manager_impl.h"
 #include "source/server/transport_socket_config_impl.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#include <bpf/libbpf.h>
+#include <bpf/bpf.h>
+#include "source/extensions/listener_managers/listener_manager/reuseport_ebpf.h"
+#include "source/extensions/listener_managers/listener_manager/reuseport.skel.h"
+#pragma clang diagnostic pop
+
 namespace Envoy {
 namespace Server {
 
@@ -70,7 +78,7 @@ public:
                           const std::string& listener_name, uint32_t tcp_backlog_size,
                           ListenerComponentFactory::BindType bind_type,
                           const Network::SocketCreationOptions& creation_options,
-                          uint32_t num_sockets, int reuseport_bpf_fd, int reuseport_map_fd_);
+                          uint32_t num_sockets);
 
   // Network::ListenSocketFactory
   Network::Socket::Type socketType() const override { return socket_type_; }
@@ -94,6 +102,7 @@ private:
   Network::SocketSharedPtr createListenSocketAndApplyOptions(ListenerComponentFactory& factory,
                                                              Network::Socket::Type socket_type,
                                                              uint32_t worker_index);
+  void loadEBPFProg(uint32_t num_sockets);
 
   ListenerComponentFactory& factory_;
   // Initially, its port number might be 0. Once a socket is created, its port
@@ -105,8 +114,10 @@ private:
   const uint32_t tcp_backlog_size_;
   ListenerComponentFactory::BindType bind_type_;
   const Network::SocketCreationOptions socket_creation_options_;
-  const int reuseport_bpf_fd_;
-  const int reuseport_map_fd_;
+  bool needBPFHook_;
+  struct reuseport_bpf *skel_obj_;
+  int reuseport_prog_fd_;
+  int reuseport_map_fd_;
   // One socket for each worker, pre-created before the workers fetch the sockets. There are
   // 3 different cases:
   // 1) All are null when doing config validation.

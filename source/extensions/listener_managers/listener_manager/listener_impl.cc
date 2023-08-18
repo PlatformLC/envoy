@@ -77,12 +77,10 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
     Network::Socket::Type socket_type, const Network::Socket::OptionsSharedPtr& options,
     const std::string& listener_name, uint32_t tcp_backlog_size,
     ListenerComponentFactory::BindType bind_type,
-    const Network::SocketCreationOptions& creation_options, uint32_t num_sockets,
-    int reuseport_bpf_fd, int reuseport_map_fd)
+    const Network::SocketCreationOptions& creation_options, uint32_t num_sockets)
     : factory_(factory), local_address_(address), socket_type_(socket_type), options_(options),
       listener_name_(listener_name), tcp_backlog_size_(tcp_backlog_size), bind_type_(bind_type),
-      socket_creation_options_(creation_options), reuseport_bpf_fd_(reuseport_bpf_fd),
-      reuseport_map_fd_(reuseport_map_fd) {
+      socket_creation_options_(creation_options) {
 
   if (local_address_->type() == Network::Address::Type::Ip) {
     if (socket_type == Network::Socket::Type::Datagram) {
@@ -101,21 +99,13 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
       bind_type_ = ListenerComponentFactory::BindType::NoBind;
     }
   }
-
+  needBPFHook_ = (bind_type_ == ListenerComponentFactory::BindType::ReusePort &&
+                  socket_type == Network::Socket::Type::Stream);
+  if (needBPFHook_) {
+    ENVOY_LOG(debug, "Load ebpf skeleton objects");
+    loadEBPFProg(num_sockets);
+  }
   sockets_.push_back(createListenSocketAndApplyOptions(factory, socket_type, 0));
-  unsigned int i = 0;
-  uint64_t fd = sockets_.back()->ioHandle().fdDoNotUse();
-  auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
-  if (err)
-    ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
-  else 
-    ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
-  fd = 60;
-  err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
-  if (err)
-    ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
-  else 
-    ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
 
   if (sockets_[0] != nullptr && local_address_->ip() && local_address_->ip()->port() == 0) {
     local_address_ = sockets_[0]->connectionInfoProvider().localAddress();
@@ -129,15 +119,33 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
       sockets_.push_back(sockets_[0]->duplicate());
     } else {
       sockets_.push_back(createListenSocketAndApplyOptions(factory, socket_type, i));
-      const uint64_t fd = sockets_.back()->ioHandle().fdDoNotUse();
-      auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
-      if (err)
-        ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
-      else 
-        ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
     }
   }
   ASSERT(sockets_.size() == num_sockets);
+}
+
+void ListenSocketFactoryImpl::loadEBPFProg(uint32_t num_sockets) {
+  // TODO(chun) need close/destory for deconstruct?
+  skel_obj_ = reuseport_bpf__open();
+  if (!skel_obj_) {
+	  throw EnvoyException(fmt::format("failed to open bpf skeleton: {}", errno));
+  }
+  // set global variable before load the objects
+  skel_obj_->rodata->rodata.total_sockets = num_sockets;
+
+  int err = reuseport_bpf__load(skel_obj_);
+	if (err) {
+    throw EnvoyException(fmt::format("reuseport_kern_bpf__load error: %d", err));
+  }
+  reuseport_map_fd_ = bpf_map__fd(skel_obj_->maps.reuseport_map);
+  if (reuseport_map_fd_ < 0) {
+    throw EnvoyException(fmt::format("get reuseport_map fd error: %d", errno));
+  }
+
+	reuseport_prog_fd_ = bpf_program__fd(skel_obj_->progs.select_sock);
+	if (reuseport_prog_fd_ < 0) {
+    throw EnvoyException(fmt::format("get prog fd error: %d", errno));
+  }
 }
 
 ListenSocketFactoryImpl::ListenSocketFactoryImpl(const ListenSocketFactoryImpl& factory_to_clone)
@@ -147,7 +155,9 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(const ListenSocketFactoryImpl& 
       tcp_backlog_size_(factory_to_clone.tcp_backlog_size_),
       bind_type_(factory_to_clone.bind_type_),
       socket_creation_options_(factory_to_clone.socket_creation_options_),
-      reuseport_bpf_fd_(factory_to_clone.reuseport_bpf_fd_),
+      needBPFHook_(factory_to_clone.needBPFHook_),
+      skel_obj_(factory_to_clone.skel_obj_),
+      reuseport_prog_fd_(factory_to_clone.reuseport_prog_fd_),
       reuseport_map_fd_(factory_to_clone.reuseport_map_fd_) {
   for (auto& socket : factory_to_clone.sockets_) {
     // In the cloning case we always duplicate() the socket. This makes sure that during listener
@@ -174,8 +184,8 @@ Network::SocketSharedPtr ListenSocketFactoryImpl::createListenSocketAndApplyOpti
   Network::Socket::OptionsSharedPtr options__ = std::make_shared<std::vector<Network::Socket::OptionConstSharedPtr>>();
   Network::Socket::appendOptions(options__, options_);
 
-  if (worker_index == 0) {
-    Network::Socket::appendOptions(options__, Network::SocketOptionFactory::buildReusePortEBPFOptions(reuseport_bpf_fd_));
+  if (needBPFHook_ && worker_index == 0) {
+    Network::Socket::appendOptions(options__, Network::SocketOptionFactory::buildReusePortEBPFOptions(reuseport_prog_fd_));
   }
   Network::SocketSharedPtr socket = factory.createListenSocket(
       local_address_, socket_type, options__, bind_type_, socket_creation_options_, worker_index);
@@ -232,16 +242,18 @@ void ListenSocketFactoryImpl::doFinalPreWorkerInit() {
   auto iterator = sockets_.begin();
   listen_and_apply_options(*iterator, tcp_backlog_size_);
   
-  // we should update bpfmap right after doFinalPreWorkerInit
-  // because it calls listen and make the socket "valid" for bfpmap update
-  uint32_t i = 0;
-  uint64_t fd = (*iterator)->ioHandle().fdDoNotUse();
-  auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
-  if (err)
-    ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
-  else 
-    ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
-  ++i;
+  if (needBPFHook_) {
+    // we should update bpfmap right after doFinalPreWorkerInit
+    // because it calls listen and make the socket "valid" for bfpmap update
+    uint32_t i = 0;
+    uint64_t fd = (*iterator)->ioHandle().fdDoNotUse();
+    auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+    if (err)
+      ENVOY_LOG(error, "bpf_map_update_elem failed: mapfd({}), errno({})", reuseport_map_fd_, errno);
+    else 
+      ENVOY_LOG(debug, "bpf_map_update_elem {}  {}", i, fd);
+    ++i;
+  }
 
   ++iterator;
 #ifndef WIN32
@@ -250,15 +262,17 @@ void ListenSocketFactoryImpl::doFinalPreWorkerInit() {
   // to balance these connections to all workers.
   // TODO(davinci26): We should update the behavior when socket duplication
   // does not cause accepts to hang in the OS.
-  for (; iterator != sockets_.end(); ++iterator) {
+  for (uint32_t i = 1; iterator != sockets_.end(); ++iterator) {
     listen_and_apply_options(*iterator, tcp_backlog_size_);
-    fd = (*iterator)->ioHandle().fdDoNotUse();
-    auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
-    if (err)
-      ENVOY_LOG(error, "bpf_map_update_elem failed mapfd({}): {}", reuseport_map_fd_, errno);
-    else 
-      ENVOY_LOG(info, "bpf_map_update_elem {}  {}", i, fd);
-    ++i;
+    if (needBPFHook_) {
+      uint64_t fd = (*iterator)->ioHandle().fdDoNotUse();
+      auto err = bpf_map_update_elem(reuseport_map_fd_, &i, &fd, BPF_ANY);
+      if (err)
+        ENVOY_LOG(error, "bpf_map_update_elem failed: mapfd({}), errno({})", reuseport_map_fd_, errno);
+      else 
+        ENVOY_LOG(debug, "bpf_map_update_elem {}  {}", i, fd);
+      ++i;
+    }
   }
 #endif
 }

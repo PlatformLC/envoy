@@ -21,7 +21,8 @@
         bpf_printk(fmt, ##__VA_ARGS__); \
     })
 
-#define dbg(fmt, ...)   ({})
+// #define dbg(fmt, ...)   ({})
+
 typedef struct {
 	__u32 idx;
 	struct bpf_spin_lock lock;	
@@ -29,9 +30,12 @@ typedef struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_REUSEPORT_SOCKARRAY);
-	__uint(max_entries, 64);
+	__uint(max_entries, 1024);
 	__type(key, __u32);
-	__type(value, __u64);
+	// either __u32/__u64 works for value, but __u64 is friendly with bpftool
+	// to dump/debug if the element exists, the actual value is not fd, but
+	// sock pointer in os.
+	__type(value, __u64);  
 } reuseport_map SEC(".maps");
 
 struct {
@@ -47,7 +51,7 @@ struct {
 	goto done;					\
 })
 
-__u32 idx = 0;
+// __u32 idx = 0;
 
 // define global const inside one rodata struct, so that userspace could
 // properly re-initialize the data before load objects
@@ -80,6 +84,7 @@ int select_sock(struct sk_reuseport_md *reuse_md)
 	bpf_spin_unlock(&idx->lock);
 
 	// atmoic does not work with kernel 5.4 (20.04), but OK with 5.15 (22.04)
+	// does not work with envoy build....
 	// index = __sync_fetch_and_add(&idx, 1);
 	// index = __sync_add_and_fetch(&idx, 1);
 
