@@ -77,7 +77,7 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
     Network::Socket::Type socket_type, const Network::Socket::OptionsSharedPtr& options,
     const std::string& listener_name, uint32_t tcp_backlog_size,
     ListenerComponentFactory::BindType bind_type,
-    const Network::SocketCreationOptions& creation_options, uint32_t num_sockets)
+    const Network::SocketCreationOptions& creation_options, uint32_t num_sockets, bool reuseport_ebpf_enabled)
     : factory_(factory), local_address_(address), socket_type_(socket_type), options_(options),
       listener_name_(listener_name), tcp_backlog_size_(tcp_backlog_size), bind_type_(bind_type),
       socket_creation_options_(creation_options) {
@@ -99,7 +99,8 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
       bind_type_ = ListenerComponentFactory::BindType::NoBind;
     }
   }
-  needBPFHook_ = (bind_type_ == ListenerComponentFactory::BindType::ReusePort &&
+  needBPFHook_ = (reuseport_ebpf_enabled &&
+                  bind_type_ == ListenerComponentFactory::BindType::ReusePort &&
                   socket_type == Network::Socket::Type::Stream);
   if (needBPFHook_) {
     ENVOY_LOG(debug, "Load ebpf skeleton objects");

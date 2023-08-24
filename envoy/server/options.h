@@ -95,6 +95,11 @@ public:
   virtual uint32_t concurrency() const PURE;
 
   /**
+   * @return bool indicating whether reuse port eBPF hook has been enabled.
+   */
+  virtual bool reuseportEBPFEnabled() const PURE;
+
+  /**
    * @return the duration of the drain period in seconds.
    */
   virtual std::chrono::seconds drainTime() const PURE;
