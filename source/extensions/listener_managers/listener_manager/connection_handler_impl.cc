@@ -86,9 +86,6 @@ void ConnectionHandlerImpl::addListener(absl::optional<uint64_t> overridden_list
               socket_factory->getListenSocket(worker_index_.has_value() ? *worker_index_ : 0),
               address, config.connectionBalancer(*address)),
           overload_manager_);
-      ENVOY_LOG(info,
-              "addActiveListener on {} for socket {}", worker_index_.has_value() ? *worker_index_ : 0, 
-                socket_factory->getListenSocket(worker_index_.has_value() ? *worker_index_ : 0)->ioHandle().fdDoNotUse());
     }
   } else {
     ASSERT(config.udpListenerConfig().has_value(), "UDP listener factory is not initialized.");
