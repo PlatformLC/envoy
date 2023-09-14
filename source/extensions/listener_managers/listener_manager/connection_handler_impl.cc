@@ -13,25 +13,57 @@
 #include "source/extensions/listener_managers/listener_manager/active_tcp_listener.h"
 #include "source/server/listener_manager_factory.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#include <bpf/libbpf.h>
+#include <bpf/bpf.h>
+#pragma clang diagnostic pop
 namespace Envoy {
 namespace Server {
 
 ConnectionHandlerImpl::ConnectionHandlerImpl(Event::Dispatcher& dispatcher,
                                              absl::optional<uint32_t> worker_index)
     : worker_index_(worker_index), dispatcher_(dispatcher),
-      per_handler_stat_prefix_(dispatcher.name() + "."), disable_listeners_(false) {}
+      per_handler_stat_prefix_(dispatcher.name() + "."), disable_listeners_(false) {
+        connections_map_fd_ = bpf_obj_get("/sys/fs/bpf/connection_cnts");
+        if (connections_map_fd_ < 0) {
+          ENVOY_LOG(error, "bpf_obj_get index {}, error: {}", worker_index_.value_or(-1), -errno);
+        }
+      }
 
 ConnectionHandlerImpl::ConnectionHandlerImpl(Event::Dispatcher& dispatcher,
                                              absl::optional<uint32_t> worker_index,
                                              OverloadManager& overload_manager)
     : worker_index_(worker_index), dispatcher_(dispatcher), overload_manager_(overload_manager),
-      per_handler_stat_prefix_(dispatcher.name() + "."), disable_listeners_(false) {}
+      per_handler_stat_prefix_(dispatcher.name() + "."), disable_listeners_(false) {
+        connections_map_fd_ = bpf_obj_get("/sys/fs/bpf/connection_cnts");
+        if (connections_map_fd_ < 0) {
+          ENVOY_LOG(error, "bpf_obj_get index {}, error: {}", worker_index_.value_or(-1), -errno);
+        }
+      }
 
-void ConnectionHandlerImpl::incNumConnections() { ++num_handler_connections_; }
+void ConnectionHandlerImpl::updateConnectionToEBPF() {
+  if (!worker_index_.has_value()) {
+    return;
+  }
+  if (connections_map_fd_ > 0) {
+    int ret = bpf_map_update_elem(connections_map_fd_, &worker_index_, &num_handler_connections_, BPF_ANY);
+    if (ret < 0) {
+      ENVOY_LOG(error, "bpf_map_update_elem index {}, error: {}", worker_index_.value(), -ret);
+    }
+  } else {
+    ENVOY_LOG(info, "bpf_map_update_elem connections_map_fd_ invalid");
+  }
+}
+void ConnectionHandlerImpl::incNumConnections() {
+  ++num_handler_connections_;
+  updateConnectionToEBPF();
+}
 
 void ConnectionHandlerImpl::decNumConnections() {
   ASSERT(num_handler_connections_ > 0);
   --num_handler_connections_;
+  updateConnectionToEBPF();
 }
 
 void ConnectionHandlerImpl::addListener(absl::optional<uint64_t> overridden_listener,

@@ -19,7 +19,7 @@ def bpf_program(name, src, bpf_object, hdrs=[], **kwargs):
         srcs = [envoy_external_dep_path("libbpf")] + [src] + hdrs,
         outs = [bpf_object],
         cmd = (
-            "clang -Wall -g -O2 -target bpf -D__TARGET_ARCH_x86 " +
+            "clang -Wall -g -O2 -mcpu=v3 -target bpf -D__TARGET_ARCH_x86 " +
             # The `.` directory is the project root, so we pass it with the `-I`
             # flag so that #includes work in the source files.
             #

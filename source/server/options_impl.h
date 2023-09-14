@@ -58,7 +58,7 @@ public:
   void setUseDynamicBaseId(bool use_dynamic_base_id) { use_dynamic_base_id_ = use_dynamic_base_id; }
   void setBaseIdPath(const std::string& base_id_path) { base_id_path_ = base_id_path; }
   void setConcurrency(uint32_t concurrency) { concurrency_ = concurrency; }
-  void setReuseportEBPF(bool reuseport_ebpf_enabled) { reuseport_ebpf_enabled_ = reuseport_ebpf_enabled; }
+  void setReuseportEBPF(const std::string& reuseport_ebpf_type) { reuseport_ebpf_type_ = reuseport_ebpf_type; }
   void setConfigPath(const std::string& config_path) { config_path_ = config_path; }
   void setConfigProto(const envoy::config::bootstrap::v3::Bootstrap& config_proto) {
     *config_proto_ = config_proto;
@@ -122,7 +122,7 @@ public:
   bool useDynamicBaseId() const override { return use_dynamic_base_id_; }
   const std::string& baseIdPath() const override { return base_id_path_; }
   uint32_t concurrency() const override { return concurrency_; }
-  bool reuseportEBPFEnabled() const override { return reuseport_ebpf_enabled_; }
+  const std::string& reuseportEBPFType() const override { return reuseport_ebpf_type_; }
   const std::string& configPath() const override { return config_path_; }
   const envoy::config::bootstrap::v3::Bootstrap& configProto() const override {
     return *config_proto_;
@@ -194,7 +194,7 @@ private:
   bool use_dynamic_base_id_{false};
   std::string base_id_path_;
   uint32_t concurrency_{1};
-  bool reuseport_ebpf_enabled_{false};
+  std::string reuseport_ebpf_type_;
   std::string config_path_;
   std::unique_ptr<envoy::config::bootstrap::v3::Bootstrap> config_proto_{
       new envoy::config::bootstrap::v3::Bootstrap()};

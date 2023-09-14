@@ -188,6 +188,7 @@ envoy_cc_extension(
     extra_visibility = [
         "//test:__subpackages__",
     ],
+    external_deps = ["libbpf"],
     deps = [
         "active_tcp_listener",
         "//envoy/common:time_interface",

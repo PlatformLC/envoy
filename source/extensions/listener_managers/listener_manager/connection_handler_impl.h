@@ -75,6 +75,8 @@ public:
   findByAddress(const Network::Address::InstanceConstSharedPtr& listen_address) override;
 
 private:
+  void updateConnectionToEBPF();
+  int connections_map_fd_;
   struct PerAddressActiveListenerDetails {
     // Strong pointer to the listener, whether TCP, UDP, QUIC, etc.
     Network::ConnectionHandler::ActiveListenerPtr listener_;

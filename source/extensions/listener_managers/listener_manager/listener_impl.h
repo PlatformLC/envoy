@@ -78,7 +78,7 @@ public:
                           const std::string& listener_name, uint32_t tcp_backlog_size,
                           ListenerComponentFactory::BindType bind_type,
                           const Network::SocketCreationOptions& creation_options,
-                          uint32_t num_sockets, bool reuseport_ebpf_enabled);
+                          uint32_t num_sockets, const std::string& reuseport_ebpf_enabled);
 
   // Network::ListenSocketFactory
   Network::Socket::Type socketType() const override { return socket_type_; }
@@ -102,7 +102,7 @@ private:
   Network::SocketSharedPtr createListenSocketAndApplyOptions(ListenerComponentFactory& factory,
                                                              Network::Socket::Type socket_type,
                                                              uint32_t worker_index);
-  void loadEBPFProg(uint32_t num_sockets);
+  void loadEBPFProg(uint32_t num_sockets, const std::string& type);
 
   ListenerComponentFactory& factory_;
   // Initially, its port number might be 0. Once a socket is created, its port

@@ -67,8 +67,9 @@ OptionsImpl::OptionsImpl(std::vector<std::string> args,
       "", "base-id-path", "path to which the base ID is written", false, "", "string", cmd);
   TCLAP::ValueArg<uint32_t> concurrency("", "concurrency", "# of worker threads to run", false,
                                         std::thread::hardware_concurrency(), "uint32_t", cmd);
-  TCLAP::SwitchArg enable_reuseport_ebpf("", "enable-reuseport-ebpf",
-                                       "Enable reuseport eBPF hook", cmd, false);
+  // "rr-atomic", "rr-per-cpu", 'lc'
+  TCLAP::ValueArg<std::string> reuseport_ebpf_type("", "reuseport-ebpf-type",
+                                       "Enable reuseport eBPF hook type", false, "", "string", cmd);
   TCLAP::ValueArg<std::string> config_path("c", "config-path", "Path to configuration file", false,
                                            "", "string", cmd);
   TCLAP::ValueArg<std::string> config_yaml(
@@ -244,7 +245,7 @@ OptionsImpl::OptionsImpl(std::vector<std::string> args,
     }
     concurrency_ = std::max(1U, concurrency.getValue());
   }
-  reuseport_ebpf_enabled_ = enable_reuseport_ebpf.getValue();
+  reuseport_ebpf_type_ = reuseport_ebpf_type.getValue();
 
   config_path_ = config_path.getValue();
   config_yaml_ = config_yaml.getValue();
@@ -388,7 +389,7 @@ Server::CommandLineOptionsPtr OptionsImpl::toCommandLineOptions() const {
   command_line_options->set_use_dynamic_base_id(useDynamicBaseId());
   command_line_options->set_base_id_path(baseIdPath());
   command_line_options->set_concurrency(concurrency());
-  command_line_options->set_enable_reuseport_ebpf(reuseportEBPFEnabled());
+  command_line_options->set_reuseport_ebpf_type(reuseportEBPFType());
   command_line_options->set_config_path(configPath());
   command_line_options->set_config_yaml(configYaml());
   command_line_options->set_allow_unknown_static_fields(allow_unknown_static_fields_);

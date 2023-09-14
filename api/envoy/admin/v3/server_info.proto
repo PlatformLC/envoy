@@ -194,6 +194,6 @@ message CommandLineOptions {
   // See :option:`--stats-tag` for details.
   repeated string stats_tag = 38;
 
-  // See :option:`--enable-reuseport-ebpf` for details.
-  bool enable_reuseport_ebpf = 39;
+  // See :option:`--reuseport-ebpf-type` for details.
+  string reuseport_ebpf_type = 39;
 }

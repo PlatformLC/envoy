@@ -77,7 +77,7 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
     Network::Socket::Type socket_type, const Network::Socket::OptionsSharedPtr& options,
     const std::string& listener_name, uint32_t tcp_backlog_size,
     ListenerComponentFactory::BindType bind_type,
-    const Network::SocketCreationOptions& creation_options, uint32_t num_sockets, bool reuseport_ebpf_enabled)
+    const Network::SocketCreationOptions& creation_options, uint32_t num_sockets, const std::string& reuseport_ebpf_type)
     : factory_(factory), local_address_(address), socket_type_(socket_type), options_(options),
       listener_name_(listener_name), tcp_backlog_size_(tcp_backlog_size), bind_type_(bind_type),
       socket_creation_options_(creation_options) {
@@ -99,12 +99,12 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
       bind_type_ = ListenerComponentFactory::BindType::NoBind;
     }
   }
-  needBPFHook_ = (reuseport_ebpf_enabled &&
+  needBPFHook_ = (reuseport_ebpf_type != "" &&
                   bind_type_ == ListenerComponentFactory::BindType::ReusePort &&
                   socket_type == Network::Socket::Type::Stream);
   if (needBPFHook_) {
     ENVOY_LOG(debug, "Load ebpf skeleton objects");
-    loadEBPFProg(num_sockets);
+    loadEBPFProg(num_sockets, reuseport_ebpf_type);
   }
   sockets_.push_back(createListenSocketAndApplyOptions(factory, socket_type, 0));
 
@@ -125,7 +125,7 @@ ListenSocketFactoryImpl::ListenSocketFactoryImpl(
   ASSERT(sockets_.size() == num_sockets);
 }
 
-void ListenSocketFactoryImpl::loadEBPFProg(uint32_t num_sockets) {
+void ListenSocketFactoryImpl::loadEBPFProg(uint32_t num_sockets, const std::string& type) {
   // TODO(chun) need close/destory for deconstruct?
   skel_obj_ = reuseport_bpf__open();
   if (!skel_obj_) {
@@ -136,16 +136,27 @@ void ListenSocketFactoryImpl::loadEBPFProg(uint32_t num_sockets) {
 
   int err = reuseport_bpf__load(skel_obj_);
 	if (err) {
-    throw EnvoyException(fmt::format("reuseport_kern_bpf__load error: %d", err));
+    throw EnvoyException(fmt::format("reuseport_kern_bpf__load error: {}", err));
   }
   reuseport_map_fd_ = bpf_map__fd(skel_obj_->maps.reuseport_map);
   if (reuseport_map_fd_ < 0) {
-    throw EnvoyException(fmt::format("get reuseport_map fd error: %d", errno));
+    throw EnvoyException(fmt::format("get reuseport_map fd error: {}", errno));
   }
 
-	reuseport_prog_fd_ = bpf_program__fd(skel_obj_->progs.select_sock);
+  if (type == "rr-atomic") {
+    reuseport_prog_fd_ = bpf_program__fd(skel_obj_->progs.rr_atomic_idx);
+  }
+  else if (type == "rr-per-cpu")
+    reuseport_prog_fd_ = bpf_program__fd(skel_obj_->progs.rr_per_cpu);
+  else if (type == "lc")
+    reuseport_prog_fd_ = bpf_program__fd(skel_obj_->progs.select_sock_lc);
+  else
+    throw EnvoyException(fmt::format("unknown algorithm {} for ebpf hook", type));
+	
+  ENVOY_LOG(info, "Load listener {} reuseport algorithm to {}", listener_name_, type);
+
 	if (reuseport_prog_fd_ < 0) {
-    throw EnvoyException(fmt::format("get prog fd error: %d", errno));
+    throw EnvoyException(fmt::format("get prog fd error: {}", errno));
   }
 }
 

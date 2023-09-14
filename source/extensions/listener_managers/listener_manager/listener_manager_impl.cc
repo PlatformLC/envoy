@@ -1102,7 +1102,7 @@ void ListenerManagerImpl::createListenSocketFactory(ListenerImpl& listener) {
       listener.addSocketFactory(std::make_unique<ListenSocketFactoryImpl>(
           *factory_, listener.addresses()[i], socket_type, listener.listenSocketOptions(i),
           listener.name(), listener.tcpBacklogSize(), bind_type, creation_options,
-          server_.options().concurrency(), server_.options().reuseportEBPFEnabled()));
+          server_.options().concurrency(), server_.options().reuseportEBPFType()));
     }
   }
   END_TRY
